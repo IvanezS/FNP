@@ -1,8 +1,8 @@
 ﻿using System;
 using System.Diagnostics;
 using System.IO;
-using System.Security.Permissions;
-
+//using System.Security.Permissions;
+using System.Configuration;
 
 namespace FNP
 {
@@ -14,23 +14,25 @@ namespace FNP
         }
 
 
-        [PermissionSet(SecurityAction.Demand, Name = "FullTrust")]
+        //[PermissionSet(SecurityAction.Demand, Name = "FullTrust")]
         private static void Run()
         {
-            string[] args = Environment.GetCommandLineArgs();
+            //string[] args = Environment.GetCommandLineArgs();
+            string filelocation = ConfigurationManager.AppSettings["filelocation"];
+            
 
             // If a directory is not specified, exit program.
-            if (args.Length != 2)
-            {
+            //if (args.Length != 2)
+            //{
                 // Display the proper way to call the program.
-                Console.WriteLine("FNP.exe (path to printed directory) ");
-                return;
-            }
+            //    Console.WriteLine("FNP.exe (path to printed directory) ");
+            //    return;
+            //}
 
             // Create a new FileSystemWatcher and set its properties.
             using (FileSystemWatcher watcher = new FileSystemWatcher())
             {
-                watcher.Path = args[1];
+                watcher.Path = filelocation;
 
                 // Watch for changes in LastAccess and LastWrite times, and
                 // the renaming of files or directories.
@@ -60,13 +62,16 @@ namespace FNP
         // Define the event handlers.
         private static void OnChanged(object source, FileSystemEventArgs e)
         {
+            short copies = short.Parse(ConfigurationManager.AppSettings["copies"]);
             // Specify what is done when a file is changed, created, or deleted.
             Console.WriteLine($"File: {e.FullPath} {e.ChangeType}");
-            //for(int i = 0; i < 4; i++)
+            for (int i = 0; i < copies; i++)
+            {
                 pdfPrint(e.FullPath);
 
-            Console.WriteLine("File printed");
-            System.Threading.Thread.Sleep(5000);
+                Console.WriteLine("File printed");
+                System.Threading.Thread.Sleep(5000);
+            }
             File.Delete(e.FullPath);
             Console.WriteLine("File deleted");
 
@@ -78,38 +83,48 @@ namespace FNP
 
         public static void pdfPrint(string pdfFileName)
         {
-            string processFilename = Microsoft.Win32.Registry.LocalMachine
-                 .OpenSubKey("Software")
-                 .OpenSubKey("Microsoft")
-                 .OpenSubKey("Windows")
-                 .OpenSubKey("CurrentVersion")
-                 .OpenSubKey("App Paths")
-                 .OpenSubKey("AcroRd32.exe")
-                 .GetValue(String.Empty).ToString();
-
-            ProcessStartInfo info = new ProcessStartInfo();
-            info.Verb = "print";
-            info.FileName = processFilename;
-            info.Arguments = String.Format("/p /h {0}", pdfFileName);
-            info.CreateNoWindow = true;
-            info.WindowStyle = ProcessWindowStyle.Hidden;
-            //(It won't be hidden anyway... thanks Adobe!)
-            info.UseShellExecute = false;
-
-            Process p = Process.Start(info);
-            p.StartInfo.WindowStyle = ProcessWindowStyle.Hidden;
-
-            int counter = 0;
-            while (!p.HasExited)
+            try
             {
-                System.Threading.Thread.Sleep(1000);
-                counter += 1;
-                if (counter == 5) break;
-            }
-            if (!p.HasExited)
-            {
+                string processFilename = Microsoft.Win32.Registry.LocalMachine
+                     .OpenSubKey("Software")
+                     .OpenSubKey("Microsoft")
+                     .OpenSubKey("Windows")
+                     .OpenSubKey("CurrentVersion")
+                     .OpenSubKey("App Paths")
+                     .OpenSubKey("AcroRd32.exe")
+                     .GetValue(String.Empty).ToString();
+
+                ProcessStartInfo info = new ProcessStartInfo();
+                info.Verb = "print";
+                info.FileName = processFilename;
+                info.Arguments = String.Format("/p /h {0}", pdfFileName);
+                info.CreateNoWindow = true;
+                info.WindowStyle = ProcessWindowStyle.Hidden;
+                //(It won't be hidden anyway... thanks Adobe!)
+                info.UseShellExecute = false;
+
+                info.RedirectStandardOutput = true;
+
+                Process p = Process.Start(info);
+                p.StartInfo.WindowStyle = ProcessWindowStyle.Hidden;
+                //Console.WriteLine(p.StandardOutput.ReadToEnd());
+
+                int counter = 0;
+                while (!p.HasExited)
+                {
+                    System.Threading.Thread.Sleep(1000);
+                    counter += 1;
+                    if (counter == 5) break;
+                }
+
+                p.EnableRaisingEvents = true;
+
                 p.CloseMainWindow();
                 p.Kill();
+            }
+            catch (Exception e)
+            {
+                Console.WriteLine(e);
             }
         }
 
